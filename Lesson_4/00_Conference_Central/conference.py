@@ -356,7 +356,7 @@ class ConferenceApi(remote.Service):
 
 
 # - - - Registration - - - - - - - - - - - - - - - - - - - -
-    @nbd.transactional(xg=True)
+    @ndb.transactional(xg=True)
     def _conferenceRegistration(self, request, reg=True):
         """Register or unregister user for selected conference."""
         retval = None
@@ -410,6 +410,32 @@ class ConferenceApi(remote.Service):
     def registerForConference(self, request):
         """Register user for selected conference."""
         return self._conferenceRegistration(request)
+
+    @endpoints.method(message_types.VoidMessage, ConferenceForms,
+                      path='conferences/attending',
+                      http_method='GET', name='getConferencesToAttend')
+    def getConferencesToAttend(self, request):
+        """Get list of conferences that user has registered for."""
+        # TODO:
+        prof = self._getProfileFromUser()  # get user Profile
+        conf_keys = [ndb.Key(urlsafe=wsck)
+                     for wsck in prof.conferenceKeysToAttend]
+        conferences = ndb.get_multi(conf_keys)
+
+        # get organizers
+        organisers = [ndb.Key(Profile, conf.organizerUserId)
+                      for conf in conferences]
+        profiles = ndb.get_multi(organisers)
+
+        # put display names in a dict for easier fetching
+        names = {}
+        for profile in profiles:
+            names[profile.key.id()] = profile.displayName
+
+        # return set of ConferenceForm objects per Conference
+        return ConferenceForms(items=[self._copyConferenceToForm(conf,
+                                                                 names[conf.organizerUserId])
+                                      for conf in conferences])
 
 
 # registers API
